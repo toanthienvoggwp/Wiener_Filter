@@ -1,22 +1,23 @@
 .data
     # --- FILE CONFIG ---
-    input_filename:   .asciiz "input19-44-21_11-Nov-25_10_10_5.txt"
-    desired_filename: .asciiz "desired19-44-21_11-Nov-25_10_10.txt"
+    input_filename:   .asciiz "input.txt"
+    desired_filename: .asciiz "desired.txt"
     outFilename:      .asciiz "output.txt"
 
     # --- VARIABLES ---
     M:            .word 10            # M = 10
     N:            .word 10           # N = 10
     ten:          .float 10.0
+    half:         .float 0.5         # For proper rounding
     
-    # --- HEAP POINTERS ---
-    ptr_input:    .word 0
-    ptr_desired:  .word 0
-    ptr_output:   .word 0
+    # --- HEAP POINTERS (Using required variable names) ---
+    input_signal:       .word 0      # Required: input signal array
+    desired_signal:     .word 0      # Required: desired signal array
+    output_signal:      .word 0      # Required: output signal array
+    optimize_coefficient: .word 0    # Required: Wiener filter coefficients
     
     ptr_autocorr: .word 0
     ptr_vec_B:    .word 0
-    ptr_coeffs:   .word 0
     ptr_matrix_A: .word 0
     
     # --- BUFFERS ---
@@ -24,7 +25,7 @@
     buffer:       .space 2048
     numBuffer:    .space 32
     
-    mmse:         .float 0.0
+    mmse:         .float 0.0         # Required: MMSE value
 
     # --- STRINGS ---
     strMinus:     .asciiz "-"
@@ -46,19 +47,19 @@ main:
     lw   $s0, M
     lw   $s1, N
 
-    # Alloc Data Arrays
+    # Alloc Data Arrays (using required names)
     sll  $a0, $s1, 2
     li   $v0, 9
     syscall
-    sw   $v0, ptr_input
+    sw   $v0, input_signal
     
     li   $v0, 9
     syscall
-    sw   $v0, ptr_desired
+    sw   $v0, desired_signal
     
     li   $v0, 9
     syscall
-    sw   $v0, ptr_output
+    sw   $v0, output_signal
     
     # Alloc Vectors
     sll  $a0, $s0, 2
@@ -72,7 +73,7 @@ main:
     
     li   $v0, 9
     syscall
-    sw   $v0, ptr_coeffs
+    sw   $v0, optimize_coefficient
     
     # Alloc Matrix
     mul  $t0, $s0, $s0
@@ -91,11 +92,11 @@ file_loop:
     beq  $s7, 2, process_phase
     beq  $s7, 1, set_des
     la   $a0, input_filename
-    lw   $s2, ptr_input
+    lw   $s2, input_signal
     j    do_read
 set_des:
     la   $a0, desired_filename
-    lw   $s2, ptr_desired
+    lw   $s2, desired_signal
 
 do_read:
     li   $v0, 13
@@ -202,8 +203,8 @@ stat_outer:
     move $t1, $t0
 stat_inner:
     beq  $t1, $s1, save_stats
-    lw   $t2, ptr_input
-    lw   $t3, ptr_desired
+    lw   $t2, input_signal
+    lw   $t3, desired_signal
     sll  $t4, $t1, 2
     add  $t5, $t2, $t4
     lwc1 $f10, 0($t5)
@@ -332,7 +333,7 @@ back_j:
     sll  $t2, $t2, 2
     add  $t3, $t3, $t2
     lwc1 $f21, 0($t3)
-    lw   $t3, ptr_coeffs
+    lw   $t3, optimize_coefficient
     sll  $t2, $t1, 2
     add  $t3, $t3, $t2
     lwc1 $f22, 0($t3)
@@ -348,7 +349,7 @@ calc_xi:
     add  $t3, $t3, $t2
     lwc1 $f24, 0($t3)
     div.s $f25, $f20, $f24
-    lw   $t3, ptr_coeffs
+    lw   $t3, optimize_coefficient
     sll  $t2, $t0, 2
     add  $t3, $t3, $t2
     swc1 $f25, 0($t3)
@@ -370,11 +371,11 @@ conv_loop:
     beq  $t1, $s0, save_y
     sub  $t2, $t0, $t1
     blt  $t2, 0, next_k_filt
-    lw   $t3, ptr_coeffs
+    lw   $t3, optimize_coefficient
     sll  $t4, $t1, 2
     add  $t3, $t3, $t4
     lwc1 $f4, 0($t3)
-    lw   $t3, ptr_input
+    lw   $t3, input_signal
     sll  $t4, $t2, 2
     add  $t3, $t3, $t4
     lwc1 $f5, 0($t3)
@@ -384,7 +385,7 @@ next_k_filt:
     addi $t1, $t1, 1
     j    conv_loop
 save_y:
-    lw   $t3, ptr_output
+    lw   $t3, output_signal
     sll  $t4, $t0, 2
     add  $t3, $t3, $t4
     swc1 $f12, 0($t3)
@@ -395,8 +396,8 @@ save_y:
 # PHẦN 5: TÍNH MMSE (CÔNG THỨC 2: Direct MSE)
 # ===========================================================
 calc_mmse:
-    lw   $s3, ptr_desired
-    lw   $s4, ptr_output
+    lw   $s3, desired_signal
+    lw   $s4, output_signal
     lw   $s1, N
     li   $t0, 0
     mtc1 $zero, $f30
@@ -423,31 +424,109 @@ save_m:
     # ===========================================================
     # PHẦN 6: IN KẾT QUẢ
     # ===========================================================
-    # Terminal
+    # Terminal - Print with rounding (reading original values)
     li   $v0, 4
     la   $a0, strFiltered
     syscall
-    lw   $s2, ptr_output
+    lw   $s2, output_signal
     li   $s3, 0
     lw   $s5, N
+    l.s  $f2, ten
+    
 p_loop:
     beq  $s3, $s5, p_mmse
     lwc1 $f12, 0($s2)
-    li   $v0, 2
+    
+    # Check if negative for terminal
+    mtc1 $zero, $f4
+    cvt.s.w $f4, $f4
+    c.lt.s $f12, $f4
+    bc1f p_pos
+    li   $v0, 4
+    la   $a0, strMinus
     syscall
+    neg.s $f12, $f12
+    
+p_pos:
+    # Extract integer and decimal parts (same as file output)
+    trunc.w.s $f0, $f12
+    mfc1 $t0, $f0              # integer part
+    cvt.s.w $f1, $f0
+    sub.s $f1, $f12, $f1       # fractional part
+    mul.s $f1, $f1, $f2        # multiply by 10
+    round.w.s $f1, $f1         # round
+    mfc1 $t1, $f1              # decimal digit
+    
+    # Check if decimal = 10
+    li   $t2, 10
+    bne  $t1, $t2, p_print
+    addi $t0, $t0, 1
+    li   $t1, 0
+    
+p_print:
+    # Print integer part
+    li   $v0, 1
+    move $a0, $t0
+    syscall
+    
+    # Print decimal point
+    li   $v0, 4
+    la   $a0, strDot
+    syscall
+    
+    # Print decimal part
+    li   $v0, 1
+    move $a0, $t1
+    syscall
+    
+    # Print space
     li   $v0, 4
     la   $a0, strSpace
     syscall
+    
     addi $s2, $s2, 4
     addi $s3, $s3, 1
     j    p_loop
+    
 p_mmse:
     li   $v0, 4
     la   $a0, strMMSE
     syscall
+    
+    l.s  $f2, ten
     mov.s $f12, $f30
-    li   $v0, 2
+    
+    # Extract integer and decimal parts for MMSE (same as file output)
+    trunc.w.s $f0, $f12
+    mfc1 $t0, $f0              # integer part
+    cvt.s.w $f1, $f0
+    sub.s $f1, $f12, $f1       # fractional part
+    mul.s $f1, $f1, $f2        # multiply by 10
+    round.w.s $f1, $f1         # round
+    mfc1 $t1, $f1              # decimal digit
+    
+    # Check if decimal = 10
+    li   $t2, 10
+    bne  $t1, $t2, p_mmse_print
+    addi $t0, $t0, 1
+    li   $t1, 0
+    
+p_mmse_print:
+    # Print integer part
+    li   $v0, 1
+    move $a0, $t0
     syscall
+    
+    # Print decimal point
+    li   $v0, 4
+    la   $a0, strDot
+    syscall
+    
+    # Print decimal part
+    li   $v0, 1
+    move $a0, $t1
+    syscall
+    
     li   $v0, 4
     la   $a0, strNewline
     syscall
@@ -465,12 +544,14 @@ p_mmse:
     la   $a1, strFiltered
     li   $a2, 17
     syscall
-    lw   $s2, ptr_output
+    lw   $s2, output_signal
     lw   $s5, N
     li   $s3, 0
 w_loop:
     beq  $s3, $s5, w_mmse
     lwc1 $f12, 0($s2)
+    
+    # Check if negative
     mtc1 $zero, $f4
     cvt.s.w $f4, $f4
     c.lt.s $f12, $f4
@@ -481,34 +562,47 @@ w_loop:
     li   $a2, 1
     syscall
     neg.s $f12, $f12
+    
 w_pos:
-    trunc.w.s $f0, $f12
-    mfc1 $t0, $f0
-    cvt.s.w $f1, $f0
-    sub.s $f1, $f12, $f1
+    # Convert to integer.decimal format (same as terminal)
     l.s   $f2, ten
-    mul.s $f1, $f1, $f2
-    round.w.s $f1, $f1
-    mfc1  $t1, $f1
-    li    $t2, 10
-    bne   $t1, $t2, w_ok
-    addi  $t0, $t0, 1
-    li    $t1, 0
-w_ok:
+    trunc.w.s $f0, $f12
+    mfc1 $t0, $f0              # integer part
+    cvt.s.w $f1, $f0
+    sub.s $f1, $f12, $f1       # fractional part
+    mul.s $f1, $f1, $f2        # multiply by 10
+    round.w.s $f1, $f1         # round
+    mfc1 $t1, $f1              # decimal digit
+    
+    # Check if decimal = 10
+    li   $t2, 10
+    bne  $t1, $t2, w_write
+    addi $t0, $t0, 1
+    li   $t1, 0
+    
+w_write:
+    # Write integer part
     move  $a0, $t0
     jal   w_int
+    
+    # Write decimal point
     li    $v0, 15
     move  $a0, $s6
     la    $a1, strDot
     li    $a2, 1
     syscall
+    
+    # Write decimal part
     move  $a0, $t1
     jal   w_int
+    
+    # Write space
     li    $v0, 15
     move  $a0, $s6
     la    $a1, strSpace
     li    $a2, 1
     syscall
+    
     addi  $s2, $s2, 4
     addi  $s3, $s3, 1
     j     w_loop
@@ -519,27 +613,38 @@ w_mmse:
     la    $a1, strMMSE
     li    $a2, 7
     syscall
-    mov.s $f12, $f30
-    trunc.w.s $f0, $f12
-    mfc1  $t0, $f0
-    cvt.s.w $f1, $f0
-    sub.s $f1, $f12, $f1
+    
     l.s   $f2, ten
-    mul.s $f1, $f1, $f2
-    round.w.s $f1, $f1
-    mfc1  $t1, $f1
-    li    $t2, 10
-    bne   $t1, $t2, wm_ok
-    addi  $t0, $t0, 1
-    li    $t1, 0
-wm_ok:
+    mov.s $f12, $f30
+    
+    # Convert MMSE to integer.decimal format (same as terminal)
+    trunc.w.s $f0, $f12
+    mfc1 $t0, $f0              # integer part
+    cvt.s.w $f1, $f0
+    sub.s $f1, $f12, $f1       # fractional part
+    mul.s $f1, $f1, $f2        # multiply by 10
+    round.w.s $f1, $f1         # round
+    mfc1 $t1, $f1              # decimal digit
+    
+    # Check if decimal = 10
+    li   $t2, 10
+    bne  $t1, $t2, w_mmse_write
+    addi $t0, $t0, 1
+    li   $t1, 0
+    
+w_mmse_write:
+    # Write integer part
     move  $a0, $t0
     jal   w_int
+    
+    # Write decimal point
     li    $v0, 15
     move  $a0, $s6
     la    $a1, strDot
     li    $a2, 1
     syscall
+    
+    # Write decimal part
     move  $a0, $t1
     jal   w_int
 
