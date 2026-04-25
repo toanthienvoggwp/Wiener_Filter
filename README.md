@@ -50,3 +50,14 @@ You can change basic parameters in the `.data` section of the `Wiener_Filter.asm
 ## 6. Troubleshooting
 - **Cannot read file error ("Loi mo file."):** MARS often uses the root directory of the `.jar` file as the working directory instead of the directory containing the `.asm` file. Try copying the text files to the same location as `Mars4_5.jar` or change the path in `.data` to an absolute path (e.g., `C:/path/to/input.txt`).
 - The float parsing algorithm in the source code is written manually and is capable of handling negative numbers, integer parts, and fractional parts.
+
+## 7. Application in Audio Signal Processing
+The Wiener filter is widely used in audio signal processing, particularly for noise reduction and speech enhancement. Here is a step-by-step breakdown of how it can be applied to practical audio signals:
+
+1. **Step 1: Signal Digitization (Input):** The analog audio signal is converted into a digital format (e.g., WAV). In real-world scenarios, the captured audio (input signal) is typically corrupted by background noise.
+2. **Step 2: Framing and Windowing:** Since audio signals change over time, they are divided into short, overlapping frames (e.g., 20-30 milliseconds). A window function (like a Hamming window) is applied to smooth the edges of each frame.
+3. **Step 3: Frequency Domain Transformation:** A Fast Fourier Transform (FFT) is applied to convert the time-domain audio frames into the frequency domain. It is much easier to distinguish between voice and noise frequencies in this domain.
+4. **Step 4: Noise Estimation:** The system estimates the Power Spectral Density (PSD) of the background noise. This is usually calculated during "silent" segments where no one is speaking and only noise is present.
+5. **Step 5: Filter Coefficient Calculation:** The Wiener filter coefficients are computed for each frequency bin. The filter calculates the optimal gain based on the estimated signal-to-noise ratio (SNR), assigning lower weights to noise-heavy frequencies.
+6. **Step 6: Signal Filtering:** The noisy audio spectrum is multiplied by the Wiener filter coefficients. This step effectively suppresses the background noise while preserving the desired speech or music components.
+7. **Step 7: Time Domain Reconstruction:** Finally, an Inverse Fast Fourier Transform (IFFT) is applied to convert the filtered frequency data back into a time-domain audio signal. The frames are then stitched back together (using overlap-add methods) to produce the clean output audio.
