@@ -10,7 +10,7 @@
 This project is an implementation of the **Wiener Filter** algorithm written entirely in MIPS assembly language. The program reads input signal data and desired signal data from text files (.txt), performs matrix calculations to find the optimal filter coefficients. Finally, the program filters the input signal and calculates the **Minimum Mean Square Error (MMSE)**.
 
 ## 2. Program Execution Flow
-The program is divided into 7 main parts (corresponding to the comments in the source code):
+The program is divided into 7 main parts:
 
 1. **Step 0: Memory Allocation (Heap Allocation):** Dynamically allocates memory for data arrays (Input, Desired, Output) and matrices/vectors for the algorithm (Autocorrelation, Cross-correlation, Coefficient matrix A).
 2. **Step 1: File Reading and Parsing:** Reads content from input and desired files, then converts character strings to floating-point numbers (Float) and stores them in memory.
